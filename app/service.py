@@ -5,6 +5,8 @@ from typing import Callable, List, Optional
 from app.models import DownloadItem, DownloadResult, DownloadStatus, DownloadSummary
 from app.utils import sanitize_name, remove_ansi_codes
 
+_FORMAT_WITH_CAP = 'bestvideo[height<=1080]+bestaudio/best[height<=1080]/bestvideo+bestaudio/best'
+
 
 class VideoDownloader:
     def __init__(
@@ -77,6 +79,7 @@ class VideoDownloader:
                 'cookiefile': str(self._cookies),
                 'quiet': True,
                 'no_warnings': True,
+                'format': _FORMAT_WITH_CAP,
             }
             with yt_dlp.YoutubeDL(ydl_opts_info) as ydl:
                 info = ydl.extract_info(item.url, download=False)
@@ -160,7 +163,7 @@ class VideoDownloader:
             outtmpl = '%(title)s.%(ext)s'
 
         opts = {
-            'format': 'bestvideo+bestaudio/best',
+            'format': _FORMAT_WITH_CAP,
             'merge_output_format': 'mp4',
             'outtmpl': outtmpl,
             'cookiefile': str(self._cookies),
