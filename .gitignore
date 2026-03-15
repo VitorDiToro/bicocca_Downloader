@@ -45,3 +45,9 @@ Thumbs.db
 # Test files
 Democracia e poder popular no Brasil e América Latina 2.txt
 downloader.ps1
+
+# Documentation
+docs/plans
+
+# Git worktrees
+.worktrees/
