@@ -1,0 +1,8 @@
+disciplina: "Democracia e poder popular no Brasil e América Latina"
+aulas:
+  - url: "https://exemplo.com/video1"
+    nome: "Aula 01 - Democracia e teoria crítica"
+  - url: "https://exemplo.com/video2"
+    nome: "Aula 02 - Poder popular na América Latina"
+  - url: "https://exemplo.com/video3"
+    nome: "Aula 03 - Horkheimer e a crítica social"

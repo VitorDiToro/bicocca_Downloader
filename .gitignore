@@ -1,0 +1,47 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+.env
+
+# Secrets & Configuration
+cookies.txt
+cookies**.txt
+*.log
+
+# Editor / IDE
+.vscode/
+.idea/
+.claude/
+CLAUDE.md
+*.swp
+*.swo
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Downloads (in case the script downloads large files here)
+*.mp4
+*.mkv
+*.avi
+*.wmv
+*.mov
+*.pdf
+*.zip
+*.rar
+
+# Test files
+Democracia e poder popular no Brasil e América Latina 2.txt
+downloader.ps1
