@@ -21,6 +21,7 @@ class DownloaderGUI:
         self.yaml_path = tk.StringVar()
         self.download_subtitles = tk.BooleanVar(value=True)
         self.output_dir = tk.StringVar()
+        self.limit_bitrate = tk.BooleanVar(value=True)
         self.downloading = False
 
         self._create_widgets()
@@ -53,6 +54,10 @@ class DownloaderGUI:
         ttk.Checkbutton(mode_frame, text="Baixar legendas em português",
                         variable=self.download_subtitles).grid(
             row=1, column=0, columnspan=3, sticky=tk.W, pady=(10, 0))
+
+        ttk.Checkbutton(mode_frame, text="Limitar qualidade de vídeo (~2 Mbps)",
+                        variable=self.limit_bitrate).grid(
+            row=2, column=0, columnspan=3, sticky=tk.W, pady=(5, 0))
 
         # Seção de pasta de destino
         dest_frame = ttk.LabelFrame(main_frame, text="Pasta de destino (opcional)", padding="10")
@@ -228,6 +233,7 @@ class DownloaderGUI:
                     output_dir=output_dir,
                     download_subtitles=self.download_subtitles.get(),
                     disciplina=disciplina,
+                    max_bitrate_kbps=2000 if self.limit_bitrate.get() else None,
                 )
             finally:
                 self.downloading = False
