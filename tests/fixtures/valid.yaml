@@ -1,0 +1,6 @@
+disciplina: "Curso de Exemplo"
+aulas:
+  - url: "https://exemplo.com/video1"
+    nome: "Aula 01 - Introdução"
+  - url: "https://exemplo.com/video2"
+    nome: "Aula 02 - Conceitos"
