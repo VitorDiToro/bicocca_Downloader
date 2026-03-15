@@ -24,6 +24,10 @@ class VideoDownloader:
         self._log_cb = log_callback
         self._progress_cb = progress_callback
 
+    @staticmethod
+    def _bitrate_sort_keys(bitrate_kbps: int) -> list:
+        return [f'vbr:{bitrate_kbps}', f'tbr:{bitrate_kbps}', 'res:1080']
+
     def download_items(
         self,
         items: List[DownloadItem],
@@ -85,11 +89,7 @@ class VideoDownloader:
                 'format': _FORMAT_WITH_CAP,
             }
             if max_bitrate_kbps is not None:
-                ydl_opts_info['format_sort'] = [
-                    f'vbr:{max_bitrate_kbps}',
-                    f'tbr:{max_bitrate_kbps}',
-                    'res:1080',
-                ]
+                ydl_opts_info['format_sort'] = self._bitrate_sort_keys(max_bitrate_kbps)
             with yt_dlp.YoutubeDL(ydl_opts_info) as ydl:
                 info = ydl.extract_info(item.url, download=False)
 
@@ -181,11 +181,7 @@ class VideoDownloader:
             'restrictfilenames': False,
         }
         if max_bitrate_kbps is not None:
-            opts['format_sort'] = [
-                f'vbr:{max_bitrate_kbps}',
-                f'tbr:{max_bitrate_kbps}',
-                'res:1080',
-            ]
+            opts['format_sort'] = self._bitrate_sort_keys(max_bitrate_kbps)
         if download_subtitles:
             opts.update({
                 'writesubtitles': True,
