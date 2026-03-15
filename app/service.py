@@ -30,6 +30,7 @@ class VideoDownloader:
         output_dir: Optional[Path] = None,
         download_subtitles: bool = True,
         disciplina: Optional[str] = None,
+        max_bitrate_kbps: Optional[int] = None,
     ) -> DownloadSummary:
         try:
             import yt_dlp
@@ -56,7 +57,8 @@ class VideoDownloader:
                 self._log_cb(f"  Nome: {item.custom_name}")
 
             result = self._process_item(
-                item, output_dir, download_subtitles, downloaded_ids, yt_dlp, summary
+                item, output_dir, download_subtitles, downloaded_ids, yt_dlp, summary,
+                max_bitrate_kbps
             )
             summary.results.append(result)
 
@@ -72,7 +74,8 @@ class VideoDownloader:
 
         return summary
 
-    def _process_item(self, item, output_dir, download_subtitles, downloaded_ids, yt_dlp, summary):
+    def _process_item(self, item, output_dir, download_subtitles, downloaded_ids, yt_dlp, summary,
+                      max_bitrate_kbps=None):
         try:
             self._log_cb("  Verificando informações do vídeo...")
             ydl_opts_info = {
@@ -81,6 +84,12 @@ class VideoDownloader:
                 'no_warnings': True,
                 'format': _FORMAT_WITH_CAP,
             }
+            if max_bitrate_kbps is not None:
+                ydl_opts_info['format_sort'] = [
+                    f'vbr:{max_bitrate_kbps}',
+                    f'tbr:{max_bitrate_kbps}',
+                    'res:1080',
+                ]
             with yt_dlp.YoutubeDL(ydl_opts_info) as ydl:
                 info = ydl.extract_info(item.url, download=False)
 
@@ -102,7 +111,7 @@ class VideoDownloader:
             return DownloadResult(item=item, status=DownloadStatus.ERROR, message=str(e))
 
         try:
-            ydl_opts = self._build_ydl_opts(item, output_dir, download_subtitles)
+            ydl_opts = self._build_ydl_opts(item, output_dir, download_subtitles, max_bitrate_kbps)
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                 ydl.download([item.url])
 
@@ -155,7 +164,7 @@ class VideoDownloader:
                 self._log_cb(f"  ⚠ Legenda inválida, será re-baixada")
                 sub.unlink()
 
-    def _build_ydl_opts(self, item, output_dir, download_subtitles):
+    def _build_ydl_opts(self, item, output_dir, download_subtitles, max_bitrate_kbps=None):
         if item.use_custom_name:
             base = output_dir if output_dir else Path('.')
             outtmpl = str(base / 'temp_%(id)s.%(ext)s')
@@ -171,6 +180,12 @@ class VideoDownloader:
             'encoding': 'utf-8',
             'restrictfilenames': False,
         }
+        if max_bitrate_kbps is not None:
+            opts['format_sort'] = [
+                f'vbr:{max_bitrate_kbps}',
+                f'tbr:{max_bitrate_kbps}',
+                'res:1080',
+            ]
         if download_subtitles:
             opts.update({
                 'writesubtitles': True,
