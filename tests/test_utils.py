@@ -1,5 +1,5 @@
 import pytest
-from app.utils import sanitize_name, remove_ansi_codes
+from app.utils import sanitize_name, remove_ansi_codes, resolve_output_dir
 
 
 class TestSanitizeName:
@@ -34,3 +34,30 @@ class TestRemoveAnsiCodes:
 
     def test_multiple_codes(self):
         assert remove_ansi_codes("\x1b[1m\x1b[32mBold Green\x1b[0m") == "Bold Green"
+
+
+class TestResolveOutputDir:
+    def test_returns_none_when_base_dir_is_none(self):
+        assert resolve_output_dir(None, "single", None) is None
+
+    def test_returns_none_when_base_dir_is_empty_string(self):
+        assert resolve_output_dir("", "yaml", "Disciplina X") is None
+
+    def test_single_mode_returns_path_of_base_dir(self, tmp_path):
+        result = resolve_output_dir(str(tmp_path), "single", None)
+        assert result == tmp_path
+
+    def test_file_mode_returns_path_of_base_dir(self, tmp_path):
+        result = resolve_output_dir(str(tmp_path), "file", None)
+        assert result == tmp_path
+
+    def test_yaml_mode_appends_sanitized_disciplina_as_subdir(self, tmp_path):
+        result = resolve_output_dir(str(tmp_path), "yaml", "Democracia: poder popular")
+        assert result == tmp_path / "Democracia - poder popular"
+
+    def test_yaml_mode_without_disciplina_returns_base(self, tmp_path):
+        result = resolve_output_dir(str(tmp_path), "yaml", None)
+        assert result == tmp_path
+
+    def test_returns_none_when_base_dir_is_whitespace_only(self):
+        assert resolve_output_dir("   ", "single", None) is None
