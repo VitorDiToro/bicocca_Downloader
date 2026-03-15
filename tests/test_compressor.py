@@ -2,7 +2,7 @@ import pytest
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-from app.compressor import VideoCompressor  # will fail until app/compressor.py exists
+from app.compressor import VideoCompressor
 
 _LARGE = VideoCompressor.SIZE_LIMIT_BYTES + 1
 _SMALL = 1024
@@ -43,19 +43,19 @@ class TestVideoCompressor:
 
         mock_run.assert_called_once()
         cmd = mock_run.call_args[0][0]
-        assert 'libx264' in cmd
-        assert '-b:v' in cmd
-        assert '3000k' in cmd
-        assert '-maxrate' in cmd
-        assert '6000k' in cmd   # bufsize = VIDEO_BITRATE_KBPS * 2
-        assert '-c:a' in cmd
-        assert 'copy' in cmd
+        assert '-c:v' in cmd
+        assert cmd[cmd.index('-c:v') + 1] == 'libx264'
+        assert cmd[cmd.index('-b:v') + 1] == '3000k'
+        assert cmd[cmd.index('-maxrate') + 1] == '3000k'
+        assert cmd[cmd.index('-bufsize') + 1] == '6000k'
+        assert cmd[cmd.index('-c:a') + 1] == 'copy'
 
     def test_replaces_original_on_success(self, compressor, tmp_path):
         """Quando ffmpeg tem sucesso, os.replace é chamado com (temp, original)."""
         video_file = tmp_path / "video.mp4"
         video_file.write_bytes(b"x")
         expected_temp = tmp_path / "video_tmp_compress.mp4"
+        expected_temp.write_bytes(b"compressed")  # simula saída do ffmpeg
 
         with patch('app.compressor.os.path.getsize', return_value=_LARGE), \
              patch('app.compressor.subprocess.run') as mock_run, \

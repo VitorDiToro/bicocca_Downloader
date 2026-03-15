@@ -48,6 +48,10 @@ class VideoCompressor:
             temp_path.unlink(missing_ok=True)
             return
 
+        if not temp_path.exists():
+            self._log("  ✗ ffmpeg saiu com sucesso mas o arquivo temporário não foi criado")
+            return
+
         new_size = os.path.getsize(temp_path)
         os.replace(temp_path, file_path)
         self._log(
