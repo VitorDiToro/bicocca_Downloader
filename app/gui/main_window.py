@@ -7,6 +7,7 @@ from app.models import DownloadItem
 from app.parsers import parse_yaml_file, parse_txt_file
 from app.service import VideoDownloader
 from app.utils import resolve_output_dir
+from app.compressor import VideoCompressor
 
 
 class DownloaderGUI:
@@ -14,14 +15,14 @@ class DownloaderGUI:
         self.root = root
         self.root.title("Moodle video downloader")
         self.root.geometry("600x500")
-        self.root.resizable(False, False)
+        self.root.resizable(True, True)
+        self.root.minsize(600, 500)
 
         self.mode = tk.StringVar(value="single")
         self.file_path = tk.StringVar()
         self.yaml_path = tk.StringVar()
         self.download_subtitles = tk.BooleanVar(value=True)
         self.output_dir = tk.StringVar()
-        self.limit_bitrate = tk.BooleanVar(value=True)
         self.downloading = False
 
         self._create_widgets()
@@ -55,9 +56,6 @@ class DownloaderGUI:
                         variable=self.download_subtitles).grid(
             row=1, column=0, columnspan=3, sticky=tk.W, pady=(10, 0))
 
-        ttk.Checkbutton(mode_frame, text="Limitar qualidade de vídeo (~2 Mbps)",
-                        variable=self.limit_bitrate).grid(
-            row=2, column=0, columnspan=3, sticky=tk.W, pady=(5, 0))
 
         # Seção de pasta de destino
         dest_frame = ttk.LabelFrame(main_frame, text="Pasta de destino (opcional)", padding="10")
@@ -209,12 +207,16 @@ class DownloaderGUI:
             return
 
         try:
+            compressor = VideoCompressor(
+                log_callback=lambda m: self.root.after(0, lambda msg=m: self._log(msg))
+            )
             service = VideoDownloader(
                 cookies_path=cookies_path,
                 log_callback=lambda m: self.root.after(0, lambda msg=m: self._log(msg)),
                 progress_callback=lambda p, s, e: self.root.after(
                     0, lambda pp=p, ss=s, ee=e: self._update_progress(pp, ss, ee)
                 ),
+                compressor=compressor,
             )
         except FileNotFoundError as e:
             messagebox.showerror("Erro", str(e))
@@ -233,7 +235,6 @@ class DownloaderGUI:
                     output_dir=output_dir,
                     download_subtitles=self.download_subtitles.get(),
                     disciplina=disciplina,
-                    max_bitrate_kbps=2000 if self.limit_bitrate.get() else None,
                 )
             finally:
                 self.downloading = False
