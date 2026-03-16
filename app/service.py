@@ -8,7 +8,6 @@ from app.utils import sanitize_name, remove_ansi_codes
 
 _FORMAT_WITH_CAP = 'bestvideo[height<=1080]+bestaudio/best[height<=1080]/bestvideo+bestaudio/best'
 _SUBTITLE_LANGS = ['pt', 'pt-BR']
-_SUBTITLE_EXTS = ['vtt', 'srt']
 
 
 class VideoDownloader:
@@ -151,16 +150,13 @@ class VideoDownloader:
     def _check_existing_subtitle(self, item, final_name, download_subtitles, summary):
         if not download_subtitles:
             return
-        for lang in _SUBTITLE_LANGS:
-            for ext in _SUBTITLE_EXTS:
-                sub = final_name.with_suffix(f'.{lang}.{ext}')
-                if sub.exists() and sub.stat().st_size >= 100:
-                    self._log_cb(f"  ✓ Legenda já existe: {sub}")
-                    summary.subtitle_skipped += 1
-                    return
-                elif sub.exists():
-                    self._log_cb(f"  ⚠ Legenda inválida, será re-baixada")
-                    sub.unlink()
+        sub = final_name.with_suffix('.srt')
+        if sub.exists() and sub.stat().st_size >= 100:
+            self._log_cb(f"  ✓ Legenda já existe: {sub}")
+            summary.subtitle_skipped += 1
+        elif sub.exists():
+            self._log_cb(f"  ⚠ Legenda inválida, será re-baixada")
+            sub.unlink()
 
     def _build_ydl_opts(self, item, output_dir, download_subtitles):
         if item.use_custom_name:
@@ -183,6 +179,7 @@ class VideoDownloader:
                 'writesubtitles': True,
                 'writeautomaticsub': True,
                 'subtitleslangs': _SUBTITLE_LANGS,
+                'postprocessors': [{'key': 'FFmpegSubtitlesConvertor', 'format': 'srt'}],
             })
         return opts
 
@@ -203,18 +200,17 @@ class VideoDownloader:
 
     def _move_subtitle(self, temp_file, final_name, summary):
         for lang in _SUBTITLE_LANGS:
-            for ext in _SUBTITLE_EXTS:
-                subtitle_temp = temp_file.with_suffix(f'.{lang}.{ext}')
-                if subtitle_temp.exists():
-                    if subtitle_temp.stat().st_size < 100:
-                        self._log_cb(f"  ⚠ Legenda muito pequena, pulando\n")
-                        subtitle_temp.unlink()
-                        continue
-                    subtitle_final = final_name.with_suffix(f'.{lang}.{ext}')
-                    os.rename(subtitle_temp, subtitle_final)
-                    self._log_cb(f"✓ Legenda salva como: {subtitle_final}\n")
-                    summary.subtitle_success += 1
-                    return
+            subtitle_temp = temp_file.with_suffix(f'.{lang}.srt')
+            if subtitle_temp.exists():
+                if subtitle_temp.stat().st_size < 100:
+                    self._log_cb(f"  ⚠ Legenda muito pequena, pulando\n")
+                    subtitle_temp.unlink()
+                    continue
+                subtitle_final = final_name.with_suffix('.srt')
+                os.rename(subtitle_temp, subtitle_final)
+                self._log_cb(f"✓ Legenda salva como: {subtitle_final}\n")
+                summary.subtitle_success += 1
+                return
         self._log_cb("  ⓘ Nenhuma legenda em português encontrada\n")
 
     def _progress_hook(self, d):
