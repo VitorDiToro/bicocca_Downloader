@@ -73,6 +73,75 @@ class TestDownloadItems:
         assert summary.success_count == 0
         assert any("já existe" in m for m in logs)
 
+    def test_downloads_subtitle_when_video_skipped_and_subtitle_missing(
+        self, service, logs, tmp_path
+    ):
+        """Quando vídeo já existe mas legenda não, deve baixar só a legenda."""
+        item = DownloadItem(url="http://x.com", custom_name="Aula 01")
+        # sanitize_name preserva espaço: "Aula 01_1080p.mp4"
+        video_file = tmp_path / "Aula 01_1080p.mp4"
+        video_file.write_bytes(b"x" * 1000)
+        # legenda NÃO existe ainda
+
+        vtt_temp = tmp_path / "temp_abc123.pt.vtt"
+
+        def fake_ydl_download(urls):
+            # Simula yt-dlp criando o arquivo .vtt no disco
+            vtt_temp.write_bytes(_VTT_CONTENT)
+
+        with patch('yt_dlp.YoutubeDL') as mock_ydl, \
+             patch('app.service.subprocess.run') as mock_run:
+            mock_ctx = MagicMock()
+            mock_ctx.extract_info.return_value = {
+                'id': 'abc123', 'height': 1080,
+                'filesize': 1000, 'filesize_approx': None,
+            }
+            mock_ctx.download.side_effect = fake_ydl_download
+            mock_ydl.return_value.__enter__ = lambda s: mock_ctx
+            mock_ydl.return_value.__exit__ = MagicMock(return_value=False)
+            mock_run.return_value = MagicMock(returncode=0)
+
+            summary = service.download_items(
+                [item], output_dir=tmp_path, download_subtitles=True
+            )
+
+        assert summary.skipped_count == 1
+        # ffmpeg foi chamado para converter VTT→SRT
+        assert mock_run.called
+        cmd = mock_run.call_args[0][0]
+        assert str(vtt_temp) in cmd
+        assert str(tmp_path / "Aula 01_1080p.srt") in cmd
+
+    def test_skips_subtitle_download_when_subtitle_already_exists(
+        self, service, logs, tmp_path
+    ):
+        """Quando vídeo E legenda existem, não deve baixar a legenda de novo."""
+        item = DownloadItem(url="http://x.com", custom_name="Aula 01")
+        # sanitize_name preserva espaço: "Aula 01_1080p.mp4"
+        video_file = tmp_path / "Aula 01_1080p.mp4"
+        video_file.write_bytes(b"x" * 1000)
+        srt_file = tmp_path / "Aula 01_1080p.srt"
+        srt_file.write_bytes(_VTT_CONTENT)  # legenda já existe
+
+        with patch('yt_dlp.YoutubeDL') as mock_ydl, \
+             patch('app.service.subprocess.run') as mock_run:
+            mock_ctx = MagicMock()
+            mock_ctx.extract_info.return_value = {
+                'id': 'abc123', 'height': 1080,
+                'filesize': 1000, 'filesize_approx': None,
+            }
+            mock_ydl.return_value.__enter__ = lambda s: mock_ctx
+            mock_ydl.return_value.__exit__ = MagicMock(return_value=False)
+
+            summary = service.download_items(
+                [item], output_dir=tmp_path, download_subtitles=True
+            )
+
+        # ffmpeg NÃO deve ser chamado (legenda já existe)
+        assert not mock_run.called
+        assert summary.subtitle_skipped == 1
+        assert any("Legenda já existe" in m for m in logs)
+
     def test_summary_counts_errors(self, service, logs):
         item = DownloadItem(url="http://bad.url")
         with patch('yt_dlp.YoutubeDL') as mock_ydl:

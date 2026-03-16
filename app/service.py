@@ -98,6 +98,10 @@ class VideoDownloader:
             final_name = self._build_final_name(item, info, output_dir)
             skip_result = self._check_existing_file(item, final_name, info)
             if skip_result:
+                if download_subtitles and item.use_custom_name:
+                    self._download_subtitle_if_missing(
+                        item, info, final_name, output_dir, summary, yt_dlp
+                    )
                 return skip_result
 
             self._log_cb("  Arquivo não existe, iniciando download...")
@@ -159,6 +163,26 @@ class VideoDownloader:
         elif sub.exists():
             self._log_cb(f"  ⚠ Legenda inválida, será re-baixada")
             sub.unlink()
+
+    def _download_subtitle_if_missing(self, item, info, final_name, output_dir, summary, yt_dlp):
+        """Baixa a legenda separadamente quando o vídeo já existe no disco."""
+        sub = final_name.with_suffix('.srt')
+        if sub.exists() and sub.stat().st_size >= 100:
+            self._log_cb(f"  ✓ Legenda já existe: {sub}")
+            summary.subtitle_skipped += 1
+            return
+        self._log_cb("  Baixando legenda (vídeo já existe)...")
+        video_id = info['id']
+        base = output_dir if output_dir else Path('.')
+        ydl_opts = self._build_ydl_opts(item, output_dir, download_subtitles=True)
+        ydl_opts['skip_download'] = True
+        try:
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                ydl.download([item.url])
+            temp_file = base / f"temp_{video_id}.mp4"
+            self._move_subtitle(temp_file, final_name, summary)
+        except Exception as e:
+            self._log_cb(f"  ⚠ Erro ao baixar legenda: {e}\n")
 
     def _build_ydl_opts(self, item, output_dir, download_subtitles):
         if item.use_custom_name:
