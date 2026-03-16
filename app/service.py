@@ -1,4 +1,5 @@
 import os
+import subprocess
 from pathlib import Path
 from typing import Callable, List, Optional
 
@@ -8,6 +9,7 @@ from app.utils import sanitize_name, remove_ansi_codes
 
 _FORMAT_WITH_CAP = 'bestvideo[height<=1080]+bestaudio/best[height<=1080]/bestvideo+bestaudio/best'
 _SUBTITLE_LANGS = ['pt', 'pt-BR']
+_SUBTITLE_EXTS = ['vtt', 'srt']
 
 
 class VideoDownloader:
@@ -179,7 +181,6 @@ class VideoDownloader:
                 'writesubtitles': True,
                 'writeautomaticsub': True,
                 'subtitleslangs': _SUBTITLE_LANGS,
-                'postprocessors': [{'key': 'FFmpegSubtitlesConvertor', 'format': 'srt'}],
             })
         return opts
 
@@ -200,18 +201,43 @@ class VideoDownloader:
 
     def _move_subtitle(self, temp_file, final_name, summary):
         for lang in _SUBTITLE_LANGS:
-            subtitle_temp = temp_file.with_suffix(f'.{lang}.srt')
-            if subtitle_temp.exists():
+            for src_ext in _SUBTITLE_EXTS:
+                subtitle_temp = temp_file.with_suffix(f'.{lang}.{src_ext}')
+                if not subtitle_temp.exists():
+                    continue
                 if subtitle_temp.stat().st_size < 100:
                     self._log_cb(f"  ⚠ Legenda muito pequena, pulando\n")
                     subtitle_temp.unlink()
                     continue
                 subtitle_final = final_name.with_suffix('.srt')
-                os.rename(subtitle_temp, subtitle_final)
+                if src_ext == 'vtt':
+                    ok = self._convert_vtt_to_srt(subtitle_temp, subtitle_final)
+                    subtitle_temp.unlink(missing_ok=True)
+                    if not ok:
+                        continue
+                else:
+                    os.rename(subtitle_temp, subtitle_final)
                 self._log_cb(f"✓ Legenda salva como: {subtitle_final}\n")
                 summary.subtitle_success += 1
                 return
         self._log_cb("  ⓘ Nenhuma legenda em português encontrada\n")
+
+    def _convert_vtt_to_srt(self, vtt_path: Path, srt_path: Path) -> bool:
+        """Converte legenda VTT → SRT via ffmpeg (UTF-8). Retorna True em caso de sucesso."""
+        try:
+            result = subprocess.run(
+                ['ffmpeg', '-i', str(vtt_path),
+                 '-metadata:s:0', 'charset=UTF-8', '-y', str(srt_path)],
+                stderr=subprocess.PIPE,
+            )
+            if result.returncode != 0:
+                stderr_text = result.stderr.decode('utf-8', errors='replace')
+                self._log_cb(f"  ⚠ Erro na conversão VTT→SRT: {stderr_text[-300:]}\n")
+                return False
+            return True
+        except Exception as e:
+            self._log_cb(f"  ⚠ Erro ao executar ffmpeg para legenda: {e}\n")
+            return False
 
     def _progress_hook(self, d):
         if d['status'] == 'downloading':

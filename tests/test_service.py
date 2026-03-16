@@ -1,8 +1,8 @@
 import pytest
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock, patch, call
 from app.service import VideoDownloader
-from app.models import DownloadItem, DownloadStatus
+from app.models import DownloadItem, DownloadStatus, DownloadSummary
 
 
 @pytest.fixture
@@ -126,3 +126,198 @@ class TestDownloadItems:
         assert "_1080p.mp4" in result.name
         assert "_2160p.mp4" not in result.name
 
+
+_VTT_CONTENT = (
+    b"WEBVTT\n\n"
+    b"1\n00:00:00.600 --> 00:00:03.520\nBom dia!\n\n"
+    b"2\n00:00:03.520 --> 00:00:06.120\nSejam bem-vindos!\n\n"
+) * 10  # >100 bytes
+
+
+class TestSubtitleHandling:
+    """Testa _move_subtitle e _convert_vtt_to_srt."""
+
+    # ------------------------------------------------------------------
+    # _convert_vtt_to_srt
+    # ------------------------------------------------------------------
+
+    def test_convert_vtt_to_srt_calls_ffmpeg_with_utf8_flag(self, service, tmp_path):
+        vtt = tmp_path / "sub.pt.vtt"
+        vtt.write_bytes(_VTT_CONTENT)
+        srt = tmp_path / "sub.srt"
+
+        with patch("app.service.subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(returncode=0)
+            result = service._convert_vtt_to_srt(vtt, srt)
+
+        assert result is True
+        cmd = mock_run.call_args[0][0]
+        assert cmd[0] == "ffmpeg"
+        assert str(vtt) in cmd
+        assert str(srt) in cmd
+        assert "-metadata:s:0" in cmd
+        assert "charset=UTF-8" in cmd
+
+    def test_convert_vtt_to_srt_returns_false_on_ffmpeg_error(self, service, tmp_path):
+        vtt = tmp_path / "sub.pt.vtt"
+        vtt.write_bytes(_VTT_CONTENT)
+        srt = tmp_path / "sub.srt"
+
+        with patch("app.service.subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(returncode=1, stderr=b"erro simulado")
+            result = service._convert_vtt_to_srt(vtt, srt)
+
+        assert result is False
+
+    def test_convert_vtt_to_srt_returns_false_on_exception(self, service, tmp_path):
+        vtt = tmp_path / "sub.pt.vtt"
+        vtt.write_bytes(_VTT_CONTENT)
+        srt = tmp_path / "sub.srt"
+
+        with patch("app.service.subprocess.run", side_effect=FileNotFoundError("ffmpeg")):
+            result = service._convert_vtt_to_srt(vtt, srt)
+
+        assert result is False
+
+    # ------------------------------------------------------------------
+    # _move_subtitle — VTT encontrado
+    # ------------------------------------------------------------------
+
+    def test_move_subtitle_converts_vtt_and_removes_original(self, service, tmp_path):
+        vtt = tmp_path / "temp_abc.pt.vtt"
+        vtt.write_bytes(_VTT_CONTENT)
+        temp_file = tmp_path / "temp_abc.mp4"
+        final_name = tmp_path / "Aula_01_1080p.mp4"
+        summary = DownloadSummary()
+
+        with patch("app.service.subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(returncode=0)
+            service._move_subtitle(temp_file, final_name, summary)
+
+        # ffmpeg foi chamado
+        assert mock_run.called
+        cmd = mock_run.call_args[0][0]
+        assert str(vtt) in cmd
+        assert str(tmp_path / "Aula_01_1080p.srt") in cmd
+
+        # VTT original removido; contador incrementado
+        assert not vtt.exists()
+        assert summary.subtitle_success == 1
+
+    def test_move_subtitle_uses_pt_br_when_pt_absent(self, service, tmp_path):
+        """Deve tentar 'pt' primeiro, depois 'pt-BR'."""
+        vtt = tmp_path / "temp_xyz.pt-BR.vtt"
+        vtt.write_bytes(_VTT_CONTENT)
+        temp_file = tmp_path / "temp_xyz.mp4"
+        final_name = tmp_path / "Aula_02_1080p.mp4"
+        summary = DownloadSummary()
+
+        with patch("app.service.subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(returncode=0)
+            service._move_subtitle(temp_file, final_name, summary)
+
+        assert mock_run.called
+        assert summary.subtitle_success == 1
+
+    def test_move_subtitle_skips_vtt_smaller_than_100_bytes(self, service, tmp_path):
+        vtt = tmp_path / "temp_abc.pt.vtt"
+        vtt.write_bytes(b"WEBVTT\n\ntiny")
+        temp_file = tmp_path / "temp_abc.mp4"
+        final_name = tmp_path / "Aula_01_1080p.mp4"
+        summary = DownloadSummary()
+
+        with patch("app.service.subprocess.run") as mock_run:
+            service._move_subtitle(temp_file, final_name, summary)
+
+        assert not mock_run.called
+        assert not vtt.exists()
+        assert summary.subtitle_success == 0
+
+    def test_move_subtitle_logs_none_found_when_no_files(self, service, tmp_path, logs):
+        temp_file = tmp_path / "temp_abc.mp4"
+        final_name = tmp_path / "Aula_01_1080p.mp4"
+        summary = DownloadSummary()
+
+        service._move_subtitle(temp_file, final_name, summary)
+
+        assert summary.subtitle_success == 0
+        assert any("Nenhuma legenda" in m for m in logs)
+
+    def test_move_subtitle_continues_after_ffmpeg_failure(self, service, tmp_path):
+        """Se ffmpeg falha no .pt.vtt, tenta próximo da lista (pt-BR.vtt)."""
+        vtt_pt = tmp_path / "temp_abc.pt.vtt"
+        vtt_pt.write_bytes(_VTT_CONTENT)
+        vtt_ptbr = tmp_path / "temp_abc.pt-BR.vtt"
+        vtt_ptbr.write_bytes(_VTT_CONTENT)
+        temp_file = tmp_path / "temp_abc.mp4"
+        final_name = tmp_path / "Aula_01_1080p.mp4"
+        summary = DownloadSummary()
+
+        call_count = 0
+        def flaky_run(cmd, **kwargs):
+            nonlocal call_count
+            call_count += 1
+            # First call (pt.vtt) fails; second (pt-BR.vtt) succeeds
+            rc = 1 if call_count == 1 else 0
+            return MagicMock(returncode=rc, stderr=b"fail")
+
+        with patch("app.service.subprocess.run", side_effect=flaky_run):
+            service._move_subtitle(temp_file, final_name, summary)
+
+        assert call_count == 2
+        assert summary.subtitle_success == 1
+
+    # ------------------------------------------------------------------
+    # _move_subtitle — SRT encontrado diretamente (sem conversão)
+    # ------------------------------------------------------------------
+
+    def test_move_subtitle_renames_srt_directly(self, service, tmp_path):
+        srt_src = tmp_path / "temp_abc.pt.srt"
+        srt_src.write_bytes(_VTT_CONTENT)  # conteúdo irrelevante, tamanho > 100
+        temp_file = tmp_path / "temp_abc.mp4"
+        final_name = tmp_path / "Aula_01_1080p.mp4"
+        summary = DownloadSummary()
+
+        with patch("app.service.subprocess.run") as mock_run:
+            service._move_subtitle(temp_file, final_name, summary)
+
+        # Não chamou ffmpeg (já era SRT)
+        assert not mock_run.called
+        assert not srt_src.exists()
+        assert (tmp_path / "Aula_01_1080p.srt").exists()
+        assert summary.subtitle_success == 1
+
+    # ------------------------------------------------------------------
+    # _check_existing_subtitle
+    # ------------------------------------------------------------------
+
+    def test_check_existing_subtitle_skips_if_srt_exists(self, service, tmp_path, logs):
+        final_name = tmp_path / "Aula_01_1080p.mp4"
+        srt = final_name.with_suffix(".srt")
+        srt.write_bytes(_VTT_CONTENT)
+        summary = DownloadSummary()
+
+        service._check_existing_subtitle(None, final_name, True, summary)
+
+        assert summary.subtitle_skipped == 1
+        assert any("já existe" in m for m in logs)
+
+    def test_check_existing_subtitle_removes_invalid_srt(self, service, tmp_path):
+        final_name = tmp_path / "Aula_01_1080p.mp4"
+        srt = final_name.with_suffix(".srt")
+        srt.write_bytes(b"tiny")  # < 100 bytes
+        summary = DownloadSummary()
+
+        service._check_existing_subtitle(None, final_name, True, summary)
+
+        assert not srt.exists()
+        assert summary.subtitle_skipped == 0
+
+    def test_check_existing_subtitle_noop_when_disabled(self, service, tmp_path, logs):
+        final_name = tmp_path / "Aula_01_1080p.mp4"
+        summary = DownloadSummary()
+
+        service._check_existing_subtitle(None, final_name, False, summary)
+
+        assert summary.subtitle_skipped == 0
+        assert not any("legenda" in m.lower() for m in logs)
