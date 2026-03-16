@@ -57,29 +57,16 @@ class DownloaderGUI:
             row=1, column=0, columnspan=3, sticky=tk.W, pady=(10, 0))
 
 
-        # Seção de pasta de destino
-        dest_frame = ttk.LabelFrame(main_frame, text="Pasta de destino (opcional)", padding="10")
-        dest_frame.grid(row=2, column=0, columnspan=2, sticky=(tk.W, tk.E), pady=(0, 10))
-        d_inner = ttk.Frame(dest_frame)
-        d_inner.grid(row=0, column=0, columnspan=2, sticky=(tk.W, tk.E))
-        d_inner.columnconfigure(0, weight=1)
-        ttk.Entry(d_inner, textvariable=self.output_dir, width=55, state="readonly").grid(
-            row=0, column=0, sticky=(tk.W, tk.E), padx=(0, 5))
-        ttk.Button(d_inner, text="Escolher...", command=self._browse_output_dir).grid(row=0, column=1)
-        ttk.Label(dest_frame,
-                  text="Se não selecionada, os vídeos serão salvos na pasta atual.",
-                  font=("Arial", 8), foreground="gray").grid(row=1, column=0, columnspan=2, sticky=tk.W)
-
         # URL single frame
         self.single_frame = ttk.LabelFrame(main_frame, text="URL única", padding="10")
-        self.single_frame.grid(row=3, column=0, columnspan=2, sticky=(tk.W, tk.E), pady=(0, 10))
+        self.single_frame.grid(row=2, column=0, columnspan=2, sticky=(tk.W, tk.E), pady=(0, 10))
         ttk.Label(self.single_frame, text="Cole a URL da aula:").grid(row=0, column=0, sticky=tk.W)
         self.url_entry = ttk.Entry(self.single_frame, width=70)
         self.url_entry.grid(row=1, column=0, sticky=(tk.W, tk.E))
 
         # TXT file frame
         self.file_frame = ttk.LabelFrame(main_frame, text="Arquivo TXT", padding="10")
-        self.file_frame.grid(row=4, column=0, columnspan=2, sticky=(tk.W, tk.E), pady=(0, 10))
+        self.file_frame.grid(row=2, column=0, columnspan=2, sticky=(tk.W, tk.E), pady=(0, 10))
         self.file_frame.grid_remove()
         ttk.Label(self.file_frame, text="Selecione um arquivo .txt com URLs (uma por linha):").grid(
             row=0, column=0, columnspan=2, sticky=tk.W)
@@ -91,7 +78,7 @@ class DownloaderGUI:
 
         # YAML file frame
         self.yaml_frame = ttk.LabelFrame(main_frame, text="Arquivo YAML", padding="10")
-        self.yaml_frame.grid(row=5, column=0, columnspan=2, sticky=(tk.W, tk.E), pady=(0, 10))
+        self.yaml_frame.grid(row=2, column=0, columnspan=2, sticky=(tk.W, tk.E), pady=(0, 10))
         self.yaml_frame.grid_remove()
         ttk.Label(self.yaml_frame, text="Selecione um arquivo .yaml com disciplina e aulas:").grid(
             row=0, column=0, columnspan=2, sticky=tk.W)
@@ -101,21 +88,34 @@ class DownloaderGUI:
             row=0, column=0, sticky=(tk.W, tk.E), padx=(0, 5))
         ttk.Button(y_inner, text="Procurar...", command=self._browse_yaml).grid(row=0, column=1)
 
+        # Seção de pasta de destino
+        dest_frame = ttk.LabelFrame(main_frame, text="Pasta de destino (opcional)", padding="10")
+        dest_frame.grid(row=3, column=0, columnspan=2, sticky=(tk.W, tk.E), pady=(0, 10))
+        d_inner = ttk.Frame(dest_frame)
+        d_inner.grid(row=0, column=0, columnspan=2, sticky=(tk.W, tk.E))
+        d_inner.columnconfigure(0, weight=1)
+        ttk.Entry(d_inner, textvariable=self.output_dir, width=55, state="readonly").grid(
+            row=0, column=0, sticky=(tk.W, tk.E), padx=(0, 5))
+        ttk.Button(d_inner, text="Escolher...", command=self._browse_output_dir).grid(row=0, column=1)
+        ttk.Label(dest_frame,
+                  text="Se não selecionada, os vídeos serão salvos na pasta atual.",
+                  font=("Arial", 8), foreground="gray").grid(row=1, column=0, columnspan=2, sticky=tk.W)
+
         # Log
         log_frame = ttk.LabelFrame(main_frame, text="Log", padding="10")
-        log_frame.grid(row=6, column=0, columnspan=2, sticky=(tk.W, tk.E, tk.N, tk.S), pady=(0, 10))
+        log_frame.grid(row=4, column=0, columnspan=2, sticky=(tk.W, tk.E, tk.N, tk.S), pady=(0, 10))
         self.log_text = scrolledtext.ScrolledText(log_frame, height=12, width=70,
                                                    state="disabled", wrap=tk.WORD,
                                                    font=("Consolas", 9))
         self.log_text.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
 
         self.download_btn = ttk.Button(main_frame, text="Baixar", command=self._start_download)
-        self.download_btn.grid(row=7, column=0, columnspan=2, sticky=(tk.W, tk.E))
+        self.download_btn.grid(row=5, column=0, columnspan=2, sticky=(tk.W, tk.E))
 
         self.root.columnconfigure(0, weight=1)
         self.root.rowconfigure(0, weight=1)
         main_frame.columnconfigure(0, weight=1)
-        main_frame.rowconfigure(6, weight=1)
+        main_frame.rowconfigure(4, weight=1)
         log_frame.columnconfigure(0, weight=1)
         log_frame.rowconfigure(0, weight=1)
 
